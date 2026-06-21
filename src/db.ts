@@ -356,7 +356,7 @@ export class Database implements AssetRepository {
 			const [job] = await tx<JobRecord[]>`
         select *
         from jobs
-        where status in ('pending', 'failed')
+        where status in ('pending', 'running', 'failed')
           and attempts < max_attempts
           and run_after <= now()
           and (locked_at is null or locked_at < now() - interval '5 minutes')

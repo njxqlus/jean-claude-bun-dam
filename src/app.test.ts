@@ -233,7 +233,35 @@ class InMemoryAssetRepository implements AssetRepository {
 	}
 
 	async claimNextJob() {
-		return null;
+		const staleBefore = Date.now() - 5 * 60 * 1000;
+		const job = [...this.jobs.values()]
+			.filter(
+				(entry) =>
+					["pending", "running", "failed"].includes(entry.status) &&
+					entry.attempts < entry.max_attempts &&
+					Date.parse(entry.run_after) <= Date.now() &&
+					(entry.locked_at === null ||
+						Date.parse(entry.locked_at) < staleBefore),
+			)
+			.sort((left, right) => {
+				const runAfterDiff =
+					Date.parse(left.run_after) - Date.parse(right.run_after);
+				if (runAfterDiff !== 0) return runAfterDiff;
+				return Date.parse(left.created_at) - Date.parse(right.created_at);
+			})[0];
+		if (!job) return null;
+
+		const claimed: JobRecord = {
+			...job,
+			status: "running",
+			attempts: job.attempts + 1,
+			locked_at: new Date().toISOString(),
+			locked_by: "test-worker",
+			updated_at: new Date().toISOString(),
+			error: null,
+		};
+		this.jobs.set(claimed.id, claimed);
+		return claimed;
 	}
 
 	async completeJob() {}
@@ -287,6 +315,33 @@ function createTestContext() {
 		fetch: createFetchHandler(service),
 	};
 }
+
+describe("job claiming", () => {
+	test("reclaims stale running jobs", async () => {
+		const repo = new InMemoryAssetRepository();
+		const staleLockedAt = new Date(Date.now() - 6 * 60 * 1000).toISOString();
+		const job = await repo.enqueueJob(
+			"thumbnail.generate",
+			{ assetId: "asset-1", derivativeName: "thumb" },
+			{ runAfter: new Date(Date.now() - 1000).toISOString() },
+		);
+		repo.jobs.set(job.id, {
+			...job,
+			status: "running",
+			attempts: 1,
+			locked_at: staleLockedAt,
+			locked_by: "dead-worker",
+		});
+
+		const claimed = await repo.claimNextJob();
+
+		expect(claimed).not.toBeNull();
+		expect(claimed?.id).toBe(job.id);
+		expect(claimed?.status).toBe("running");
+		expect(claimed?.attempts).toBe(2);
+		expect(claimed?.locked_by).toBe("test-worker");
+	});
+});
 
 async function createAssetRequest(fields?: {
 	search?: string;
