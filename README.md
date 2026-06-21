@@ -81,7 +81,7 @@ docker compose up --build
 
 The service will be available at `http://localhost:3000`.
 
-MinIO console will be available at `http://localhost:9001`.
+MinIO API will be available at `http://localhost:9002` and the MinIO console at `http://localhost:9003`.
 
 ## Local Bun setup
 
