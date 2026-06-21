@@ -88,10 +88,34 @@ MinIO console will be available at `http://localhost:9001`.
 ```bash
 bun install
 bun run migrate
-bun run src/index.ts
+bun run dev
 ```
 
 If you run the service directly on the host instead of Docker, point `DATABASE_URL` at `localhost` and make sure ImageMagick is installed for `cover` thumbnails.
+
+## Development commands
+
+The project uses Bun scripts from `package.json`:
+
+```bash
+bun run dev        # start the server in watch mode
+bun run start      # start the server once
+bun run migrate    # run database migrations
+bun run typecheck  # run TypeScript without emitting files
+bun run check      # run Biome checks and TypeScript type checks
+bun run fix        # run Biome checks and write safe fixes
+```
+
+## Code style and linting
+
+Biome is used for formatting and linting, and `bun run check` also runs TypeScript type checking.
+
+```bash
+bun run check
+bun run fix
+```
+
+`bun run fix` applies Biome's safe auto-fixes, while `bun run check` verifies both Biome rules and TypeScript types without modifying files.
 
 ## Database migrations
 

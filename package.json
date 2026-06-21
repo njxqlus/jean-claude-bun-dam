@@ -1,18 +1,21 @@
 {
-  "name": "jean-claude-bun-dam",
-  "module": "src/index.ts",
-  "type": "module",
-  "private": true,
-  "scripts": {
-    "dev": "bun run --watch src/index.ts",
-    "start": "bun run src/index.ts",
-    "migrate": "bun run src/migrate.ts",
-    "typecheck": "bunx tsc --noEmit"
-  },
-  "devDependencies": {
-    "@types/bun": "latest"
-  },
-  "peerDependencies": {
-    "typescript": "^5"
-  }
+	"name": "jean-claude-bun-dam",
+	"module": "src/index.ts",
+	"type": "module",
+	"private": true,
+	"scripts": {
+		"dev": "bun run --watch src/index.ts",
+		"start": "bun run src/index.ts",
+		"migrate": "bun run src/migrate.ts",
+		"typecheck": "bunx tsc --noEmit",
+		"check": "bunx --bun @biomejs/biome check && bunx tsc --noEmit",
+		"fix": "bunx --bun @biomejs/biome check --write"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "2.5.0",
+		"@types/bun": "latest"
+	},
+	"peerDependencies": {
+		"typescript": "^5"
+	}
 }

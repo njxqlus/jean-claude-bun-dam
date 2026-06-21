@@ -1,50 +1,60 @@
 import { readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { SQL } from "bun";
-import type { CreateAssetInput, CreateDerivativeInput, DerivativeRecord, JobRecord, JobType } from "./types";
+import type {
+	AssetRecord,
+	AssetWithDerivatives,
+	CreateAssetInput,
+	CreateDerivativeInput,
+	DerivativeRecord,
+	JobRecord,
+	JobType,
+} from "./types";
 
 export class Database {
-  readonly sql: SQL;
+	readonly sql: SQL;
 
-  constructor(databaseUrl: string) {
-    this.sql = new SQL(databaseUrl, {
-      adapter: "postgres",
-      max: 10,
-      idleTimeout: 30,
-    });
-  }
+	constructor(databaseUrl: string) {
+		this.sql = new SQL(databaseUrl, {
+			adapter: "postgres",
+			max: 10,
+			idleTimeout: 30,
+		});
+	}
 
-  async connect(): Promise<void> {
-    await this.sql.connect();
-  }
+	async connect(): Promise<void> {
+		await this.sql.connect();
+	}
 
-  async close(): Promise<void> {
-    await this.sql.close();
-  }
+	async close(): Promise<void> {
+		await this.sql.close();
+	}
 
-  async migrate(migrationsDir: string): Promise<void> {
-    await this.sql`
+	async migrate(migrationsDir: string): Promise<void> {
+		await this.sql`
       create table if not exists schema_migrations (
         version text primary key,
         applied_at timestamptz not null default now()
       )
     `;
-    const entries = (await readdir(migrationsDir)).filter((name) => name.endsWith(".sql")).sort();
-    for (const entry of entries) {
-      const [alreadyApplied] = await this.sql<{ version: string }[]>`
+		const entries = (await readdir(migrationsDir))
+			.filter((name) => name.endsWith(".sql"))
+			.sort();
+		for (const entry of entries) {
+			const [alreadyApplied] = await this.sql<{ version: string }[]>`
         select version from schema_migrations where version = ${entry}
       `;
-      if (alreadyApplied) continue;
-      const sqlText = await Bun.file(join(migrationsDir, entry)).text();
-      await this.sql.begin(async (tx) => {
-        await tx.unsafe(sqlText).simple();
-        await tx`insert into schema_migrations ${tx({ version: entry })}`;
-      });
-    }
-  }
+			if (alreadyApplied) continue;
+			const sqlText = await Bun.file(join(migrationsDir, entry)).text();
+			await this.sql.begin(async (tx) => {
+				await tx.unsafe(sqlText).simple();
+				await tx`insert into schema_migrations ${tx({ version: entry })}`;
+			});
+		}
+	}
 
-  async insertAsset(input: CreateAssetInput) {
-    const [asset] = await this.sql`
+	async insertAsset(input: CreateAssetInput) {
+		const [asset] = await this.sql`
       insert into assets (
         id,
         original_filename,
@@ -80,11 +90,15 @@ export class Database {
       )
       returning *
     `;
-    return asset;
-  }
+		return asset;
+	}
 
-  async updateAssetStatus(assetId: string, status: string, error: string | null) {
-    const [asset] = await this.sql`
+	async updateAssetStatus(
+		assetId: string,
+		status: string,
+		error: string | null,
+	) {
+		const [asset] = await this.sql`
       update assets
       set status = ${status},
           error = ${error},
@@ -92,18 +106,19 @@ export class Database {
       where id = ${assetId}
       returning *
     `;
-    return asset ?? null;
-  }
+		return asset ?? null;
+	}
 
-  async getAssetById(assetId: string) {
-    const [asset] = await this.sql`select * from assets where id = ${assetId}`;
-    if (!asset) return null;
-    const derivatives = await this.sql`select * from asset_derivatives where asset_id = ${assetId} order by created_at asc`;
-    return { ...asset, derivatives };
-  }
+	async getAssetById(assetId: string) {
+		const [asset] = await this.sql`select * from assets where id = ${assetId}`;
+		if (!asset) return null;
+		const derivatives = await this
+			.sql`select * from asset_derivatives where asset_id = ${assetId} order by created_at asc`;
+		return { ...asset, derivatives };
+	}
 
-  async insertDerivative(input: CreateDerivativeInput) {
-    const [record] = await this.sql`
+	async insertDerivative(input: CreateDerivativeInput) {
+		const [record] = await this.sql`
       insert into asset_derivatives (
         id,
         asset_id,
@@ -133,68 +148,89 @@ export class Database {
         created_at = now()
       returning *
     `;
-    return record;
-  }
+		return record;
+	}
 
-  async getDerivative(assetId: string, name: string): Promise<DerivativeRecord | null> {
-    const [row] = await this.sql<DerivativeRecord[]>`
+	async getDerivative(
+		assetId: string,
+		name: string,
+	): Promise<DerivativeRecord | null> {
+		const [row] = await this.sql<DerivativeRecord[]>`
       select * from asset_derivatives where asset_id = ${assetId} and name = ${name}
     `;
-    return row ?? null;
-  }
+		return row ?? null;
+	}
 
-  async deleteAsset(assetId: string) {
-    return await this.sql.begin(async (tx) => {
-      await tx`delete from jobs where payload->>'assetId' = ${assetId}`;
-      const derivatives = await tx`select * from asset_derivatives where asset_id = ${assetId}`;
-      const [asset] = await tx`delete from assets where id = ${assetId} returning *`;
-      return { asset: asset ?? null, derivatives };
-    });
-  }
+	async deleteAsset(assetId: string) {
+		return await this.sql.begin(async (tx) => {
+			await tx`delete from jobs where payload->>'assetId' = ${assetId}`;
+			const derivatives =
+				await tx`select * from asset_derivatives where asset_id = ${assetId}`;
+			const [asset] =
+				await tx`delete from assets where id = ${assetId} returning *`;
+			return { asset: asset ?? null, derivatives };
+		});
+	}
 
-  async listAssets(filters: {
-    limit: number;
-    offset: number;
-    sortBy: string;
-    sortDirection: "asc" | "desc";
-    kind: string | null;
-    mimeType: string | null;
-    status: string | null;
-    search: string | null;
-    createdAtFrom: string | null;
-    createdAtTo: string | null;
-    expiresAtFrom: string | null;
-    expiresAtTo: string | null;
-    metadata: Record<string, unknown> | null;
-    typedMetadata: Record<string, unknown> | null;
-  }) {
-    const allowedSorts = new Set(["created_at", "expires_at", "mime_type", "kind", "status", "size"]);
-    const sortBy = allowedSorts.has(filters.sortBy) ? filters.sortBy : "created_at";
-    const clauses: string[] = [];
-    const values: unknown[] = [];
-    const add = (sql: string, value?: unknown) => {
-      clauses.push(sql.replace("?", `$${values.length + 1}`));
-      if (value !== undefined) values.push(value);
-    };
+	async listAssets(filters: {
+		limit: number;
+		offset: number;
+		sortBy: string;
+		sortDirection: "asc" | "desc";
+		kind: string | null;
+		mimeType: string | null;
+		status: string | null;
+		search: string | null;
+		createdAtFrom: string | null;
+		createdAtTo: string | null;
+		expiresAtFrom: string | null;
+		expiresAtTo: string | null;
+		metadata: Record<string, unknown> | null;
+		typedMetadata: Record<string, unknown> | null;
+	}) {
+		const allowedSorts = new Set([
+			"created_at",
+			"expires_at",
+			"mime_type",
+			"kind",
+			"status",
+			"size",
+		]);
+		const sortBy = allowedSorts.has(filters.sortBy)
+			? filters.sortBy
+			: "created_at";
+		const clauses: string[] = [];
+		const values: unknown[] = [];
+		const add = (sql: string, value?: unknown) => {
+			clauses.push(sql.replace("?", `$${values.length + 1}`));
+			if (value !== undefined) values.push(value);
+		};
 
-    if (filters.kind) add(`kind = ?`, filters.kind);
-    if (filters.mimeType) add(`mime_type = ?`, filters.mimeType);
-    if (filters.status) add(`status = ?`, filters.status);
-    if (filters.search) {
-      const value = `%${filters.search.toLowerCase()}%`;
-      clauses.push(`(lower(coalesce(search_text, '')) like $${values.length + 1} or lower(original_filename) like $${values.length + 1} or lower(normalized_name) like $${values.length + 1})`);
-      values.push(value);
-    }
-    if (filters.createdAtFrom) add(`created_at >= ?`, filters.createdAtFrom);
-    if (filters.createdAtTo) add(`created_at <= ?`, filters.createdAtTo);
-    if (filters.expiresAtFrom) add(`expires_at is not null and expires_at >= ?`, filters.expiresAtFrom);
-    if (filters.expiresAtTo) add(`expires_at is not null and expires_at <= ?`, filters.expiresAtTo);
-    if (filters.metadata) add(`metadata @> ?::jsonb`, JSON.stringify(filters.metadata));
-    if (filters.typedMetadata) add(`typed_metadata @> ?::jsonb`, JSON.stringify(filters.typedMetadata));
+		if (filters.kind) add(`kind = ?`, filters.kind);
+		if (filters.mimeType) add(`mime_type = ?`, filters.mimeType);
+		if (filters.status) add(`status = ?`, filters.status);
+		if (filters.search) {
+			const value = `%${filters.search.toLowerCase()}%`;
+			clauses.push(
+				`(lower(coalesce(search_text, '')) like $${values.length + 1} or lower(original_filename) like $${values.length + 1} or lower(normalized_name) like $${values.length + 1})`,
+			);
+			values.push(value);
+		}
+		if (filters.createdAtFrom) add(`created_at >= ?`, filters.createdAtFrom);
+		if (filters.createdAtTo) add(`created_at <= ?`, filters.createdAtTo);
+		if (filters.expiresAtFrom)
+			add(`expires_at is not null and expires_at >= ?`, filters.expiresAtFrom);
+		if (filters.expiresAtTo)
+			add(`expires_at is not null and expires_at <= ?`, filters.expiresAtTo);
+		if (filters.metadata)
+			add(`metadata @> ?::jsonb`, JSON.stringify(filters.metadata));
+		if (filters.typedMetadata)
+			add(`typed_metadata @> ?::jsonb`, JSON.stringify(filters.typedMetadata));
 
-    const whereClause = clauses.length > 0 ? `where ${clauses.join(" and ")}` : "";
-    const countQuery = `select count(*)::int as total from assets ${whereClause}`;
-    const rowsQuery = `
+		const whereClause =
+			clauses.length > 0 ? `where ${clauses.join(" and ")}` : "";
+		const countQuery = `select count(*)::int as total from assets ${whereClause}`;
+		const rowsQuery = `
       select *
       from assets
       ${whereClause}
@@ -202,33 +238,43 @@ export class Database {
       limit $${values.length + 1}
       offset $${values.length + 2}
     `;
-    const queryValues = [...values, filters.limit, filters.offset];
-    const [countRow] = await this.sql.unsafe<{ total: number }[]>(countQuery, values);
-    const rows = await this.sql.unsafe<any[]>(rowsQuery, queryValues);
-    const assetIds = rows.map((row) => row.id);
-    const derivatives =
-      assetIds.length > 0
-        ? await this.sql<any[]>`
+		const queryValues = [...values, filters.limit, filters.offset];
+		const [countRow] = await this.sql.unsafe<{ total: number }[]>(
+			countQuery,
+			values,
+		);
+		const rows = await this.sql.unsafe<AssetRecord[]>(rowsQuery, queryValues);
+		const assetIds = rows.map((row) => row.id);
+		const derivatives =
+			assetIds.length > 0
+				? await this.sql<DerivativeRecord[]>`
             select *
             from asset_derivatives
             where asset_id = any(${this.sql.array(assetIds, "UUID")})
             order by created_at asc
           `
-        : [];
-    const derivativesByAsset = new Map<string, any[]>();
-    for (const derivative of derivatives) {
-      const existing = derivativesByAsset.get(derivative.asset_id) ?? [];
-      existing.push(derivative);
-      derivativesByAsset.set(derivative.asset_id, existing);
-    }
-    return {
-      total: countRow?.total ?? 0,
-      rows: rows.map((row) => ({ ...row, derivatives: derivativesByAsset.get(row.id) ?? [] })),
-    };
-  }
+				: [];
+		const derivativesByAsset = new Map<string, DerivativeRecord[]>();
+		for (const derivative of derivatives) {
+			const existing = derivativesByAsset.get(derivative.asset_id) ?? [];
+			existing.push(derivative);
+			derivativesByAsset.set(derivative.asset_id, existing);
+		}
+		return {
+			total: countRow?.total ?? 0,
+			rows: rows.map<AssetWithDerivatives>((row) => ({
+				...row,
+				derivatives: derivativesByAsset.get(row.id) ?? [],
+			})),
+		};
+	}
 
-  async enqueueJob(type: JobType, payload: Record<string, unknown>, options?: { maxAttempts?: number; runAfter?: string }) {
-    const [job] = await this.sql`
+	async enqueueJob(
+		type: JobType,
+		payload: Record<string, unknown>,
+		options?: { maxAttempts?: number; runAfter?: string },
+	) {
+		const [job] = await this.sql`
       insert into jobs (
         id,
         type,
@@ -254,12 +300,12 @@ export class Database {
       )
       returning *
     `;
-    return job;
-  }
+		return job;
+	}
 
-  async claimNextJob(workerId: string): Promise<JobRecord | null> {
-    return await this.sql.begin(async (tx) => {
-      const [job] = await tx<JobRecord[]>`
+	async claimNextJob(workerId: string): Promise<JobRecord | null> {
+		return await this.sql.begin(async (tx) => {
+			const [job] = await tx<JobRecord[]>`
         select *
         from jobs
         where status in ('pending', 'failed')
@@ -270,8 +316,8 @@ export class Database {
         for update skip locked
         limit 1
       `;
-      if (!job) return null;
-      const [claimed] = await tx<JobRecord[]>`
+			if (!job) return null;
+			const [claimed] = await tx<JobRecord[]>`
         update jobs
         set status = 'running',
             attempts = attempts + 1,
@@ -282,12 +328,12 @@ export class Database {
         where id = ${job.id}
         returning *
       `;
-      return claimed ?? null;
-    });
-  }
+			return claimed ?? null;
+		});
+	}
 
-  async completeJob(jobId: string) {
-    await this.sql`
+	async completeJob(jobId: string) {
+		await this.sql`
       update jobs
       set status = 'completed',
           locked_at = null,
@@ -295,10 +341,10 @@ export class Database {
           updated_at = now()
       where id = ${jobId}
     `;
-  }
+	}
 
-  async failJob(jobId: string, error: string, runAfter: string | null) {
-    await this.sql`
+	async failJob(jobId: string, error: string, runAfter: string | null) {
+		await this.sql`
       update jobs
       set status = 'failed',
           error = ${error},
@@ -308,10 +354,10 @@ export class Database {
           updated_at = now()
       where id = ${jobId}
     `;
-  }
+	}
 
-  async countPendingThumbnailJobs(assetId: string): Promise<number> {
-    const [row] = await this.sql<{ total: number }[]>`
+	async countPendingThumbnailJobs(assetId: string): Promise<number> {
+		const [row] = await this.sql<{ total: number }[]>`
       select count(*)::int as total
       from jobs
       where type = 'thumbnail.generate'
@@ -319,16 +365,16 @@ export class Database {
         and attempts < max_attempts
         and payload->>'assetId' = ${assetId}
     `;
-    return row?.total ?? 0;
-  }
+		return row?.total ?? 0;
+	}
 
-  async listExpiredAssetRows(limit = 100) {
-    return await this.sql`
+	async listExpiredAssetRows(limit = 100) {
+		return await this.sql`
       select *
       from assets
       where expires_at is not null and expires_at <= now()
       order by expires_at asc
       limit ${limit}
     `;
-  }
+	}
 }
