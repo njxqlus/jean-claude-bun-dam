@@ -66,21 +66,23 @@ async function runMagick(
 	const token = crypto.randomUUID();
 	const inputPath = `/tmp/media-asset-${token}-input.bin`;
 	const outputPath = `/tmp/media-asset-${token}-output.${extension}`;
-	await Bun.write(inputPath, input);
-	const command = ["convert", inputPath, ...args, outputPath];
-	const proc = Bun.spawn(command, {
-		stdout: "pipe",
-		stderr: "pipe",
-	});
-	const exitCode = await proc.exited;
-	if (exitCode !== 0) {
-		const stderr = await new Response(proc.stderr).text();
-		throw new Error(stderr || "ImageMagick conversion failed");
+	try {
+		await Bun.write(inputPath, input);
+		const command = ["convert", inputPath, ...args, outputPath];
+		const proc = Bun.spawn(command, {
+			stdout: "pipe",
+			stderr: "pipe",
+		});
+		const exitCode = await proc.exited;
+		if (exitCode !== 0) {
+			const stderr = await new Response(proc.stderr).text();
+			throw new Error(stderr || "ImageMagick conversion failed");
+		}
+		return new Uint8Array(await Bun.file(outputPath).arrayBuffer());
+	} finally {
+		await unlink(inputPath).catch(() => undefined);
+		await unlink(outputPath).catch(() => undefined);
 	}
-	const bytes = new Uint8Array(await Bun.file(outputPath).arrayBuffer());
-	await unlink(inputPath).catch(() => undefined);
-	await unlink(outputPath).catch(() => undefined);
-	return bytes;
 }
 
 export async function createDerivativeImage(
