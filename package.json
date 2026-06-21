@@ -7,7 +7,8 @@
 		"dev": "bun run --watch src/index.ts",
 		"start": "bun run src/index.ts",
 		"migrate": "bun run src/migrate.ts",
-		"test": "bun test",
+		"test": "bun test src",
+		"test:e2e": "RUN_E2E=1 bun test test/e2e",
 		"typecheck": "bunx tsc --noEmit",
 		"check": "bunx --bun @biomejs/biome check && bunx tsc --noEmit",
 		"fix": "bunx --bun @biomejs/biome check --write"

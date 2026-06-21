@@ -101,7 +101,8 @@ The project uses Bun scripts from `package.json`:
 bun run dev        # start the server in watch mode
 bun run start      # start the server once
 bun run migrate    # run database migrations
-bun run test       # run integration tests with Bun
+bun run test       # run fast in-process tests
+bun run test:e2e   # run real HTTP tests against a running local stack
 bun run typecheck  # run TypeScript without emitting files
 bun run check      # run Biome checks and TypeScript type checks
 bun run fix        # run Biome checks and write safe fixes
@@ -121,6 +122,14 @@ Run the test suite with:
 ```bash
 bun run test
 ```
+
+For real local infrastructure checks against Docker Compose, run:
+
+```bash
+bun run test:e2e
+```
+
+`test:e2e` targets `http://localhost:3000` by default and can be pointed elsewhere with `TEST_BASE_URL`; it is intentionally separate from the default test script so GitHub Actions and normal local development stay fast unless you opt in.
 
 ## Code style and linting
 

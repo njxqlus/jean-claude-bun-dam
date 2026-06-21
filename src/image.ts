@@ -10,12 +10,15 @@ type ImageMetadata = {
 export async function extractImageMetadata(
 	file: Blob,
 ): Promise<ImageMetadata | null> {
+	const token = crypto.randomUUID();
+	const inputPath = `/tmp/media-asset-${token}-identify-input.bin`;
 	try {
-		const image = new Bun.Image(await file.arrayBuffer());
-		const metadata = await image.metadata();
-		return metadata;
+		await Bun.write(inputPath, file);
+		return await identifyImage(inputPath);
 	} catch {
 		return null;
+	} finally {
+		await unlink(inputPath).catch(() => undefined);
 	}
 }
 
@@ -58,27 +61,49 @@ function coverCropBox(
 	return { left, top, cropWidth, cropHeight };
 }
 
+async function runCommand(command: string[]) {
+	const proc = Bun.spawn(command, {
+		stdout: "pipe",
+		stderr: "pipe",
+	});
+	const exitCode = await proc.exited;
+	if (exitCode !== 0) {
+		const stderr = await new Response(proc.stderr).text();
+		throw new Error(stderr || "ImageMagick command failed");
+	}
+	return await new Response(proc.stdout).text();
+}
+
+async function identifyImage(path: string): Promise<ImageMetadata> {
+	const stdout = await runCommand(["identify", "-format", "%w %h %m", path]);
+	const [widthRaw, heightRaw, formatRaw] = stdout.trim().split(/\s+/, 3);
+	const width = Number(widthRaw);
+	const height = Number(heightRaw);
+	if (!Number.isFinite(width) || !Number.isFinite(height) || !formatRaw) {
+		throw new Error(`Unable to identify image: ${stdout}`);
+	}
+	return {
+		width,
+		height,
+		format: formatRaw.toLowerCase(),
+	};
+}
+
 async function runMagick(
 	args: string[],
 	input: Blob,
 	extension: string,
-): Promise<Uint8Array> {
+): Promise<{ bytes: Uint8Array; metadata: ImageMetadata }> {
 	const token = crypto.randomUUID();
 	const inputPath = `/tmp/media-asset-${token}-input.bin`;
 	const outputPath = `/tmp/media-asset-${token}-output.${extension}`;
 	try {
 		await Bun.write(inputPath, input);
-		const command = ["convert", inputPath, ...args, outputPath];
-		const proc = Bun.spawn(command, {
-			stdout: "pipe",
-			stderr: "pipe",
-		});
-		const exitCode = await proc.exited;
-		if (exitCode !== 0) {
-			const stderr = await new Response(proc.stderr).text();
-			throw new Error(stderr || "ImageMagick conversion failed");
-		}
-		return new Uint8Array(await Bun.file(outputPath).arrayBuffer());
+		await runCommand(["convert", inputPath, ...args, outputPath]);
+		return {
+			bytes: new Uint8Array(await Bun.file(outputPath).arrayBuffer()),
+			metadata: await identifyImage(outputPath),
+		};
 	} finally {
 		await unlink(inputPath).catch(() => undefined);
 		await unlink(outputPath).catch(() => undefined);
@@ -91,26 +116,21 @@ export async function createDerivativeImage(
 	sourceMetadata: ImageMetadata,
 	focalPoint: FocalPoint | null,
 ) {
+	const extension = request.format === "jpeg" ? "jpg" : request.format;
+	const quality = String(request.quality ?? 82);
+
 	if (request.fit === "inside") {
-		const image = new Bun.Image(await input.arrayBuffer()).resize(
-			request.width,
-			request.height,
-			{ fit: "inside", withoutEnlargement: true },
-		);
-		if (request.format === "jpeg")
-			image.jpeg({ quality: request.quality ?? 82 });
-		if (request.format === "png") image.png();
-		if (request.format === "webp")
-			image.webp({ quality: request.quality ?? 82 });
-		if (request.format === "avif")
-			image.avif({ quality: request.quality ?? 82 });
-		const bytes = await image.bytes();
-		const metadata = await new Bun.Image(bytes).metadata();
+		const args = [
+			"-resize",
+			`${request.width}x${request.height}>`,
+			...(request.format === "png" ? [] : ["-quality", quality]),
+		];
+		const result = await runMagick(args, input, extension);
 		return {
-			bytes,
+			bytes: result.bytes,
 			metadata: {
-				width: metadata.width,
-				height: metadata.height,
+				width: result.metadata.width,
+				height: result.metadata.height,
 				format: request.format,
 				fit: request.fit,
 				focalPoint,
@@ -126,7 +146,6 @@ export async function createDerivativeImage(
 		request.height,
 		focalPoint,
 	);
-	const quality = String(request.quality ?? 82);
 	const args = [
 		"-crop",
 		`${crop.cropWidth}x${crop.cropHeight}+${crop.left}+${crop.top}`,
@@ -135,16 +154,12 @@ export async function createDerivativeImage(
 		`${request.width}x${request.height}!`,
 		...(request.format === "png" ? [] : ["-quality", quality]),
 	];
-	const bytes = await runMagick(
-		args,
-		input,
-		request.format === "jpeg" ? "jpg" : request.format,
-	);
+	const result = await runMagick(args, input, extension);
 	return {
-		bytes,
+		bytes: result.bytes,
 		metadata: {
-			width: request.width,
-			height: request.height,
+			width: result.metadata.width,
+			height: result.metadata.height,
 			format: request.format,
 			fit: request.fit,
 			focalPoint,

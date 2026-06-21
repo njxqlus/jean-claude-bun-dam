@@ -11,6 +11,13 @@ import type {
 	JobType,
 } from "./types";
 
+function parseJsonValue<T>(value: unknown): T {
+	if (typeof value === "string") {
+		return JSON.parse(value) as T;
+	}
+	return value as T;
+}
+
 export interface AssetRepository {
 	connect(): Promise<void>;
 	close(): Promise<void>;
@@ -74,6 +81,39 @@ export class Database implements AssetRepository {
 		await this.sql.connect();
 	}
 
+	private mapAsset(
+		record: Omit<AssetRecord, "metadata" | "typed_metadata"> & {
+			metadata: unknown;
+			typed_metadata: unknown;
+		},
+	): AssetRecord {
+		return {
+			...record,
+			metadata: parseJsonValue<Record<string, unknown>>(record.metadata),
+			typed_metadata: parseJsonValue<Record<string, unknown>>(
+				record.typed_metadata,
+			),
+		};
+	}
+
+	private mapDerivative(
+		record: Omit<DerivativeRecord, "metadata"> & { metadata: unknown },
+	): DerivativeRecord {
+		return {
+			...record,
+			metadata: parseJsonValue<Record<string, unknown>>(record.metadata),
+		};
+	}
+
+	private mapJob(
+		record: Omit<JobRecord, "payload"> & { payload: unknown },
+	): JobRecord {
+		return {
+			...record,
+			payload: parseJsonValue<Record<string, unknown>>(record.payload),
+		};
+	}
+
 	async close(): Promise<void> {
 		await this.sql.close();
 	}
@@ -102,7 +142,14 @@ export class Database implements AssetRepository {
 	}
 
 	async insertAsset(input: CreateAssetInput) {
-		const [asset] = await this.sql`
+		const [asset] = await this.sql<
+			Array<
+				Omit<AssetRecord, "metadata" | "typed_metadata"> & {
+					metadata: unknown;
+					typed_metadata: unknown;
+				}
+			>
+		>`
       insert into assets (
         id,
         original_filename,
@@ -135,10 +182,13 @@ export class Database implements AssetRepository {
         ${JSON.stringify(input.typedMetadata)}::jsonb,
         ${input.expiresAt},
         ${input.error}
-      )
-      returning *
-    `;
-		return asset;
+	      )
+	      returning *
+	    `;
+		if (!asset) {
+			throw new Error("Failed to insert asset");
+		}
+		return this.mapAsset(asset);
 	}
 
 	async updateAssetStatus(
@@ -146,7 +196,14 @@ export class Database implements AssetRepository {
 		status: string,
 		error: string | null,
 	) {
-		const [asset] = await this.sql`
+		const [asset] = await this.sql<
+			Array<
+				Omit<AssetRecord, "metadata" | "typed_metadata"> & {
+					metadata: unknown;
+					typed_metadata: unknown;
+				}
+			>
+		>`
       update assets
       set status = ${status},
           error = ${error},
@@ -154,19 +211,34 @@ export class Database implements AssetRepository {
       where id = ${assetId}
       returning *
     `;
-		return asset ?? null;
+		return asset ? this.mapAsset(asset) : null;
 	}
 
 	async getAssetById(assetId: string) {
-		const [asset] = await this.sql`select * from assets where id = ${assetId}`;
+		const [asset] = await this.sql<
+			Array<
+				Omit<AssetRecord, "metadata" | "typed_metadata"> & {
+					metadata: unknown;
+					typed_metadata: unknown;
+				}
+			>
+		>`select * from assets where id = ${assetId}`;
 		if (!asset) return null;
-		const derivatives = await this
-			.sql`select * from asset_derivatives where asset_id = ${assetId} order by created_at asc`;
-		return { ...asset, derivatives };
+		const derivatives = await this.sql<
+			Array<Omit<DerivativeRecord, "metadata"> & { metadata: unknown }>
+		>`select * from asset_derivatives where asset_id = ${assetId} order by created_at asc`;
+		return {
+			...this.mapAsset(asset),
+			derivatives: derivatives.map((derivative) =>
+				this.mapDerivative(derivative),
+			),
+		};
 	}
 
 	async insertDerivative(input: CreateDerivativeInput) {
-		const [record] = await this.sql`
+		const [record] = await this.sql<
+			Array<Omit<DerivativeRecord, "metadata"> & { metadata: unknown }>
+		>`
       insert into asset_derivatives (
         id,
         asset_id,
@@ -194,29 +266,46 @@ export class Database implements AssetRepository {
         size = excluded.size,
         metadata = excluded.metadata,
         created_at = now()
-      returning *
-    `;
-		return record;
+	      returning *
+	    `;
+		if (!record) {
+			throw new Error("Failed to insert derivative");
+		}
+		return this.mapDerivative(record);
 	}
 
 	async getDerivative(
 		assetId: string,
 		name: string,
 	): Promise<DerivativeRecord | null> {
-		const [row] = await this.sql<DerivativeRecord[]>`
+		const [row] = await this.sql<
+			Array<Omit<DerivativeRecord, "metadata"> & { metadata: unknown }>
+		>`
       select * from asset_derivatives where asset_id = ${assetId} and name = ${name}
     `;
-		return row ?? null;
+		return row ? this.mapDerivative(row) : null;
 	}
 
 	async deleteAsset(assetId: string) {
 		return await this.sql.begin(async (tx) => {
 			await tx`delete from jobs where payload->>'assetId' = ${assetId}`;
-			const derivatives =
-				await tx`select * from asset_derivatives where asset_id = ${assetId}`;
-			const [asset] =
-				await tx`delete from assets where id = ${assetId} returning *`;
-			return { asset: asset ?? null, derivatives };
+			const derivatives = await tx<
+				Array<Omit<DerivativeRecord, "metadata"> & { metadata: unknown }>
+			>`select * from asset_derivatives where asset_id = ${assetId}`;
+			const [asset] = await tx<
+				Array<
+					Omit<AssetRecord, "metadata" | "typed_metadata"> & {
+						metadata: unknown;
+						typed_metadata: unknown;
+					}
+				>
+			>`delete from assets where id = ${assetId} returning *`;
+			return {
+				asset: asset ? this.mapAsset(asset) : null,
+				derivatives: derivatives.map((derivative) =>
+					this.mapDerivative(derivative),
+				),
+			};
 		});
 	}
 
@@ -291,11 +380,20 @@ export class Database implements AssetRepository {
 			countQuery,
 			values,
 		);
-		const rows = await this.sql.unsafe<AssetRecord[]>(rowsQuery, queryValues);
+		const rows = await this.sql.unsafe<
+			Array<
+				Omit<AssetRecord, "metadata" | "typed_metadata"> & {
+					metadata: unknown;
+					typed_metadata: unknown;
+				}
+			>
+		>(rowsQuery, queryValues);
 		const assetIds = rows.map((row) => row.id);
 		const derivatives =
 			assetIds.length > 0
-				? await this.sql<DerivativeRecord[]>`
+				? await this.sql<
+						Array<Omit<DerivativeRecord, "metadata"> & { metadata: unknown }>
+					>`
             select *
             from asset_derivatives
             where asset_id = any(${this.sql.array(assetIds, "UUID")})
@@ -305,14 +403,16 @@ export class Database implements AssetRepository {
 		const derivativesByAsset = new Map<string, DerivativeRecord[]>();
 		for (const derivative of derivatives) {
 			const existing = derivativesByAsset.get(derivative.asset_id) ?? [];
-			existing.push(derivative);
+			existing.push(this.mapDerivative(derivative));
 			derivativesByAsset.set(derivative.asset_id, existing);
 		}
 		return {
 			total: countRow?.total ?? 0,
 			rows: rows.map<AssetWithDerivatives>((row) => ({
-				...row,
-				derivatives: derivativesByAsset.get(row.id) ?? [],
+				...this.mapAsset(row),
+				derivatives: (derivativesByAsset.get(row.id) ?? []).map((derivative) =>
+					this.mapDerivative(derivative),
+				),
 			})),
 		};
 	}
@@ -322,7 +422,9 @@ export class Database implements AssetRepository {
 		payload: Record<string, unknown>,
 		options?: { maxAttempts?: number; runAfter?: string },
 	) {
-		const [job] = await this.sql`
+		const [job] = await this.sql<
+			Array<Omit<JobRecord, "payload"> & { payload: unknown }>
+		>`
       insert into jobs (
         id,
         type,
@@ -345,15 +447,20 @@ export class Database implements AssetRepository {
         null,
         null,
         null
-      )
-      returning *
-    `;
-		return job;
+	      )
+	      returning *
+	    `;
+		if (!job) {
+			throw new Error("Failed to enqueue job");
+		}
+		return this.mapJob(job);
 	}
 
 	async claimNextJob(workerId: string): Promise<JobRecord | null> {
 		return await this.sql.begin(async (tx) => {
-			const [job] = await tx<JobRecord[]>`
+			const [job] = await tx<
+				Array<Omit<JobRecord, "payload"> & { payload: unknown }>
+			>`
         select *
         from jobs
         where status in ('pending', 'running', 'failed')
@@ -365,7 +472,9 @@ export class Database implements AssetRepository {
         limit 1
       `;
 			if (!job) return null;
-			const [claimed] = await tx<JobRecord[]>`
+			const [claimed] = await tx<
+				Array<Omit<JobRecord, "payload"> & { payload: unknown }>
+			>`
         update jobs
         set status = 'running',
             attempts = attempts + 1,
@@ -376,7 +485,7 @@ export class Database implements AssetRepository {
         where id = ${job.id}
         returning *
       `;
-			return claimed ?? null;
+			return claimed ? this.mapJob(claimed) : null;
 		});
 	}
 
@@ -417,12 +526,20 @@ export class Database implements AssetRepository {
 	}
 
 	async listExpiredAssetRows(limit = 100) {
-		return await this.sql`
+		const rows = await this.sql<
+			Array<
+				Omit<AssetRecord, "metadata" | "typed_metadata"> & {
+					metadata: unknown;
+					typed_metadata: unknown;
+				}
+			>
+		>`
       select *
       from assets
       where expires_at is not null and expires_at <= now()
       order by expires_at asc
       limit ${limit}
     `;
+		return rows.map((row) => this.mapAsset(row));
 	}
 }
