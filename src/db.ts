@@ -11,7 +11,55 @@ import type {
 	JobType,
 } from "./types";
 
-export class Database {
+export interface AssetRepository {
+	connect(): Promise<void>;
+	close(): Promise<void>;
+	migrate(migrationsDir: string): Promise<void>;
+	insertAsset(input: CreateAssetInput): Promise<AssetRecord>;
+	updateAssetStatus(
+		assetId: string,
+		status: string,
+		error: string | null,
+	): Promise<AssetRecord | null>;
+	getAssetById(assetId: string): Promise<AssetWithDerivatives | null>;
+	insertDerivative(input: CreateDerivativeInput): Promise<DerivativeRecord>;
+	getDerivative(
+		assetId: string,
+		name: string,
+	): Promise<DerivativeRecord | null>;
+	deleteAsset(assetId: string): Promise<{
+		asset: AssetRecord | null;
+		derivatives: DerivativeRecord[];
+	}>;
+	listAssets(filters: {
+		limit: number;
+		offset: number;
+		sortBy: string;
+		sortDirection: "asc" | "desc";
+		kind: string | null;
+		mimeType: string | null;
+		status: string | null;
+		search: string | null;
+		createdAtFrom: string | null;
+		createdAtTo: string | null;
+		expiresAtFrom: string | null;
+		expiresAtTo: string | null;
+		metadata: Record<string, unknown> | null;
+		typedMetadata: Record<string, unknown> | null;
+	}): Promise<{ total: number; rows: AssetWithDerivatives[] }>;
+	enqueueJob(
+		type: JobType,
+		payload: Record<string, unknown>,
+		options?: { maxAttempts?: number; runAfter?: string },
+	): Promise<JobRecord>;
+	claimNextJob(workerId: string): Promise<JobRecord | null>;
+	completeJob(jobId: string): Promise<void>;
+	failJob(jobId: string, error: string, runAfter: string | null): Promise<void>;
+	countPendingThumbnailJobs(assetId: string): Promise<number>;
+	listExpiredAssetRows(limit?: number): Promise<AssetRecord[]>;
+}
+
+export class Database implements AssetRepository {
 	readonly sql: SQL;
 
 	constructor(databaseUrl: string) {

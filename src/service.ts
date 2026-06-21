@@ -1,6 +1,6 @@
 import { join } from "node:path";
 import type { AppConfig } from "./config";
-import type { Database } from "./db";
+import type { AssetRepository } from "./db";
 import { createDerivativeImage, extractImageMetadata } from "./image";
 import { S3StorageAdapter, type StorageAdapter } from "./storage";
 import type { ThumbnailJobPayload } from "./types";
@@ -21,14 +21,11 @@ import {
 } from "./utils";
 
 export class AssetService {
-	readonly storage: StorageAdapter;
-
 	constructor(
 		private readonly config: AppConfig,
-		readonly db: Database,
-	) {
-		this.storage = new S3StorageAdapter(config);
-	}
+		readonly db: AssetRepository,
+		readonly storage: StorageAdapter = new S3StorageAdapter(config),
+	) {}
 
 	async createAssetFromRequest(request: Request) {
 		const formData = await request.formData();

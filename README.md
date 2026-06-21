@@ -101,9 +101,25 @@ The project uses Bun scripts from `package.json`:
 bun run dev        # start the server in watch mode
 bun run start      # start the server once
 bun run migrate    # run database migrations
+bun run test       # run integration tests with Bun
 bun run typecheck  # run TypeScript without emitting files
 bun run check      # run Biome checks and TypeScript type checks
 bun run fix        # run Biome checks and write safe fixes
+```
+
+## Testing approach
+
+Tests use Bun's built-in test runner and focus on endpoint-level integration coverage.
+
+- tests exercise the real HTTP request handlers and `AssetService` behavior
+- tests mock only infrastructure boundaries: the database repository and object storage adapter
+- tests do not add unit-level coverage for internal helpers
+- all REST endpoints should be covered through request/response assertions
+
+Run the test suite with:
+
+```bash
+bun run test
 ```
 
 ## Code style and linting
