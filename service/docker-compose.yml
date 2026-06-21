@@ -44,7 +44,8 @@ services:
       "
 
   app:
-    build: .
+    build:
+      context: .
     depends_on:
       postgres:
         condition: service_healthy
@@ -53,7 +54,7 @@ services:
       createbucket:
         condition: service_completed_successfully
     env_file:
-      - .env
+      - ./.env
     ports:
       - "3000:3000"
     command: bun run src/index.ts
