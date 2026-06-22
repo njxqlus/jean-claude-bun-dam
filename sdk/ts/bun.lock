@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "jean-claude-bun-dam-sdk",
+      "name": "@njxqlus/jean-claude-bun-dam-sdk",
       "devDependencies": {
         "@biomejs/biome": "2.5.0",
         "typescript": "^5.9.3",

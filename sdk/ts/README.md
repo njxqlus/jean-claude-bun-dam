@@ -1,4 +1,4 @@
-# jean-claude-bun-dam-sdk
+# @njxqlus/jean-claude-bun-dam-sdk
 
 One-file TypeScript SDK for the Jean-Claude Bun-Dam media asset service.
 
@@ -11,7 +11,7 @@ You can also pass `baseUrl` directly when creating the client.
 ## Usage
 
 ```ts
-import { createClient } from "jean-claude-bun-dam-sdk";
+import { createClient } from "@njxqlus/jean-claude-bun-dam-sdk";
 
 const client = createClient();
 

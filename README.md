@@ -5,7 +5,7 @@ Jean-Claude Bun-DAM is a self-hosted media asset service for private file storag
 ## What is in this repo
 
 - `service/` Bun microservice with PostgreSQL-backed metadata and jobs
-- `sdk/ts/` one-file TypeScript SDK published as `jean-claude-bun-dam-sdk`
+- `sdk/ts/` one-file TypeScript SDK published as `@njxqlus/jean-claude-bun-dam-sdk`
 
 ## What the service does
 
@@ -40,7 +40,7 @@ Required service configuration lives in `service/.env`; see [service/README.md](
 ## Install the SDK
 
 ```bash
-npm install jean-claude-bun-dam-sdk
+npm install @njxqlus/jean-claude-bun-dam-sdk
 ```
 
 The SDK is dependency-light and uses standard `fetch`.
@@ -54,7 +54,7 @@ export JEAN_CLAUDE_BUN_DAM_SERVER_URL=http://localhost:3000
 ## Use the SDK
 
 ```ts
-import { createClient } from "jean-claude-bun-dam-sdk";
+import { createClient } from "@njxqlus/jean-claude-bun-dam-sdk";
 
 const client = createClient();
 
