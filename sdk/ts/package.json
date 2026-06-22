@@ -22,7 +22,7 @@
 		"access": "public"
 	},
 	"scripts": {
-		"build": "mkdir -p dist && bun build ./index.ts --target=node --format=esm --outfile ./dist/index.js && bunx tsc index.ts --declaration --emitDeclarationOnly --outDir dist",
+		"build": "mkdir -p dist && bun build ./index.ts --target=node --format=esm --outfile ./dist/index.js && bunx tsc -p tsconfig.json --declaration --emitDeclarationOnly --outDir dist",
 		"check": "bunx --bun @biomejs/biome check index.ts README.md package.json tsconfig.json && bunx tsc --noEmit",
 		"fix": "bunx --bun @biomejs/biome check --write index.ts README.md package.json tsconfig.json"
 	},
