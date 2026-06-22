@@ -17,6 +17,13 @@ export function createFetchHandler(service: AssetService) {
 	return async function fetch(request: Request) {
 		const url = new URL(request.url);
 		try {
+			if (request.method === "GET" && url.pathname === "/healthz") {
+				return jsonResponse({ ok: true });
+			}
+			if (request.method === "GET" && url.pathname === "/readyz") {
+				await service.db.ping();
+				return jsonResponse({ ok: true });
+			}
 			if (request.method === "POST" && url.pathname === "/assets") {
 				const asset = await service.createAssetFromRequest(request);
 				return jsonResponse(asset, 201);

@@ -21,6 +21,7 @@ function parseJsonValue<T>(value: unknown): T {
 export interface AssetRepository {
 	connect(): Promise<void>;
 	close(): Promise<void>;
+	ping(): Promise<void>;
 	migrate(migrationsDir: string): Promise<void>;
 	insertAsset(input: CreateAssetInput): Promise<AssetRecord>;
 	updateAssetStatus(
@@ -116,6 +117,10 @@ export class Database implements AssetRepository {
 
 	async close(): Promise<void> {
 		await this.sql.close();
+	}
+
+	async ping(): Promise<void> {
+		await this.sql`select 1`;
 	}
 
 	async migrate(migrationsDir: string): Promise<void> {

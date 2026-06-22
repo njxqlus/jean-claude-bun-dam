@@ -56,10 +56,17 @@ class InMemoryAssetRepository implements AssetRepository {
 	readonly assets = new Map<string, AssetRecord>();
 	readonly derivatives = new Map<string, DerivativeRecord[]>();
 	readonly jobs = new Map<string, JobRecord>();
+	healthy = true;
 
 	async connect() {}
 
 	async close() {}
+
+	async ping() {
+		if (!this.healthy) {
+			throw new Error("database unavailable");
+		}
+	}
 
 	async migrate() {}
 
@@ -409,6 +416,32 @@ describe("asset endpoints", () => {
 		expect(fileResponse.headers.get("content-type")).toBe(created.mime_type);
 		expect(fileResponse.headers.get("content-length")).toBe("17");
 		expect(await fileResponse.text()).toBe("hello integration");
+	});
+
+	test("serves health and readiness endpoints", async () => {
+		const healthResponse = await context.fetch(
+			new Request("http://test/healthz"),
+		);
+		expect(healthResponse.status).toBe(200);
+		expect(await healthResponse.json()).toEqual({ ok: true });
+
+		const readyResponse = await context.fetch(
+			new Request("http://test/readyz"),
+		);
+		expect(readyResponse.status).toBe(200);
+		expect(await readyResponse.json()).toEqual({ ok: true });
+
+		context.db.healthy = false;
+		const failedReadyResponse = await context.fetch(
+			new Request("http://test/readyz"),
+		);
+		expect(failedReadyResponse.status).toBe(400);
+		expect(await failedReadyResponse.json()).toEqual({
+			error: {
+				message: "database unavailable",
+				details: null,
+			},
+		});
 	});
 
 	test("lists assets with endpoint filters and deletes them through the API", async () => {
