@@ -1,0 +1,33 @@
+{
+	"name": "jean-claude-bun-dam-sdk",
+	"version": "1.0.0",
+	"description": "TypeScript SDK for the Jean-Claude Bun-Dam media asset service.",
+	"type": "module",
+	"files": [
+		"index.ts",
+		"dist"
+	],
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js",
+			"default": "./dist/index.js"
+		}
+	},
+	"types": "./dist/index.d.ts",
+	"main": "./dist/index.js",
+	"module": "./dist/index.js",
+	"sideEffects": false,
+	"publishConfig": {
+		"access": "public"
+	},
+	"scripts": {
+		"build": "mkdir -p dist && bun build ./index.ts --target=node --format=esm --outfile ./dist/index.js && bunx tsc index.ts --declaration --emitDeclarationOnly --outDir dist",
+		"check": "bunx --bun @biomejs/biome check index.ts README.md package.json tsconfig.json && bunx tsc --noEmit",
+		"fix": "bunx --bun @biomejs/biome check --write index.ts README.md package.json tsconfig.json"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "2.5.0",
+		"typescript": "^5.9.3"
+	}
+}
