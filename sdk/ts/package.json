@@ -1,7 +1,24 @@
 {
 	"name": "@njxqlus/jean-claude-bun-dam-sdk",
-	"version": "1.0.2",
+	"version": "1.0.3",
 	"description": "TypeScript SDK for the Jean-Claude Bun-Dam media asset service.",
+	"license": "GPL-3.0-only",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/njxqlus/jean-claude-bun-dam.git",
+		"directory": "sdk/ts"
+	},
+	"homepage": "https://github.com/njxqlus/jean-claude-bun-dam#readme",
+	"bugs": {
+		"url": "https://github.com/njxqlus/jean-claude-bun-dam/issues"
+	},
+	"keywords": [
+		"typescript",
+		"sdk",
+		"media",
+		"assets",
+		"bun"
+	],
 	"type": "module",
 	"files": [
 		"index.ts",

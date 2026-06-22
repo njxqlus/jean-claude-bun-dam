@@ -1,6 +1,6 @@
 # @njxqlus/jean-claude-bun-dam-sdk
 
-One-file TypeScript SDK for the Jean-Claude Bun-Dam media asset service.
+One-file TypeScript SDK for the Jean-Claude Bun-DAM media asset service.
 
 ## Configuration
 
