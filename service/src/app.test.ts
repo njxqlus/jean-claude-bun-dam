@@ -109,6 +109,17 @@ class InMemoryAssetRepository implements AssetRepository {
 		return updated;
 	}
 
+	async clearAssetExpiry(assetId: string) {
+		const existing = this.assets.get(assetId);
+		if (!existing) return null;
+		const updated: AssetRecord = {
+			...existing,
+			expires_at: null,
+		};
+		this.assets.set(assetId, updated);
+		return updated;
+	}
+
 	async getAssetById(assetId: string) {
 		const asset = this.assets.get(assetId);
 		if (!asset) return null;
@@ -489,6 +500,45 @@ describe("asset endpoints", () => {
 			new Request(`http://test/assets/${createdFirst.id}`),
 		);
 		expect(missingResponse.status).toBe(404);
+	});
+
+	test("finalizes a temporary asset through the API", async () => {
+		const createResponse = await context.fetch(
+			await createAssetRequest({
+				temporary: true,
+				ttlSeconds: 3600,
+			}),
+		);
+		const created = (await createResponse.json()) as AssetWithDerivatives;
+		expect(created.expires_at).not.toBeNull();
+
+		const finalizeResponse = await context.fetch(
+			new Request(`http://test/assets/${created.id}`, {
+				method: "POST",
+			}),
+		);
+		expect(finalizeResponse.status).toBe(200);
+		const finalized = (await finalizeResponse.json()) as AssetWithDerivatives;
+		expect(finalized.id).toBe(created.id);
+		expect(finalized.expires_at).toBeNull();
+	});
+
+	test("rejects finalizing a non-temporary asset", async () => {
+		const createResponse = await context.fetch(await createAssetRequest());
+		const created = (await createResponse.json()) as AssetWithDerivatives;
+
+		const finalizeResponse = await context.fetch(
+			new Request(`http://test/assets/${created.id}`, {
+				method: "POST",
+			}),
+		);
+		expect(finalizeResponse.status).toBe(400);
+		expect(await finalizeResponse.json()).toEqual({
+			error: {
+				message: "Asset is not temporary",
+				details: null,
+			},
+		});
 	});
 
 	test("serves derivative files for an existing asset", async () => {

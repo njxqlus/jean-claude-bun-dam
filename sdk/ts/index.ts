@@ -69,6 +69,7 @@ export type CleanupExpiredResult = {
 	deletedDerivatives: number;
 	checkedAt: string;
 };
+export type FinalizeAssetResult = Asset;
 export type ListAssetsParams = {
 	limit?: number;
 	offset?: number;
@@ -210,6 +211,18 @@ export class JeanClaudeBunDamClient {
 	 */
 	async getAsset(id: string): Promise<Asset> {
 		return this.requestJson<Asset>(`/assets/${encodeSegment(id)}`);
+	}
+
+	/**
+	 * Converts a temporary asset into a permanent one by clearing its expiry.
+	 */
+	async finalizeAsset(id: string): Promise<FinalizeAssetResult> {
+		return this.requestJson<FinalizeAssetResult>(
+			`/assets/${encodeSegment(id)}`,
+			{
+				method: "POST",
+			},
+		);
 	}
 
 	/**

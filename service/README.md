@@ -293,6 +293,10 @@ Query parameters:
 
 Returns a single asset and its derivatives.
 
+### `POST /assets/:id`
+
+Finalizes a temporary asset by clearing `expires_at` so cleanup no longer removes it.
+
 ### `GET /assets/:id/file`
 
 Streams the original file through the service.
@@ -368,6 +372,12 @@ curl --get 'http://localhost:3000/assets' \
 
 ```bash
 curl http://localhost:3000/assets/<asset-id>
+```
+
+### Finalize a temporary asset
+
+```bash
+curl -X POST http://localhost:3000/assets/<asset-id>
 ```
 
 ### Stream original file

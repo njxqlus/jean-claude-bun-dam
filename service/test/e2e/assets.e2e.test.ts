@@ -93,6 +93,12 @@ async function getAsset(assetId: string) {
 	return await fetch(`${baseUrl}/assets/${assetId}`);
 }
 
+async function finalizeAsset(assetId: string) {
+	return await fetch(`${baseUrl}/assets/${assetId}`, {
+		method: "POST",
+	});
+}
+
 async function deleteAsset(assetId: string) {
 	return await fetch(`${baseUrl}/assets/${assetId}`, {
 		method: "DELETE",
@@ -286,5 +292,28 @@ describeE2E("real infrastructure asset endpoints", () => {
 		const missingResponse = await getAsset(created.id);
 		expect(missingResponse.status).toBe(404);
 		createdAssetIds.delete(created.id);
+	}, 15000);
+
+	test("finalizes a temporary asset server-side", async () => {
+		const createResponse = await createAsset({
+			file: new File(["keep me"], "temporary.txt", { type: "text/plain" }),
+			metadata: { suite: runId, case: "finalize" },
+			temporary: true,
+			ttlSeconds: 3600,
+		});
+
+		expect(createResponse.status).toBe(201);
+		const created = await json<AssetResponse & { expires_at: string | null }>(
+			createResponse,
+		);
+		createdAssetIds.add(created.id);
+		expect(created.expires_at).not.toBeNull();
+
+		const finalizeResponse = await finalizeAsset(created.id);
+		expect(finalizeResponse.status).toBe(200);
+		const finalized = await json<AssetResponse & { expires_at: string | null }>(
+			finalizeResponse,
+		);
+		expect(finalized.expires_at).toBeNull();
 	}, 15000);
 });
