@@ -1,36 +1,23 @@
-# Jean-Claude Bun-Dam
+# Jean-Claude Bun-DAM
 
-API-first media asset platform built with Bun and TypeScript for internal products that need private file storage, metadata search, and image derivative generation without exposing bucket URLs directly.
+Jean-Claude Bun-DAM is a self-hosted media asset service for private file storage, metadata search, proxied file delivery, and image derivative generation, with a matching TypeScript SDK for application integration.
 
-## Current status
+## What is in this repo
 
-The repository currently contains the production microservice in `service/`.
+- `service/` Bun microservice with PostgreSQL-backed metadata and jobs
+- `sdk/ts/` one-file TypeScript SDK published as `jean-claude-bun-dam-sdk`
 
-Planned next step:
+## What the service does
 
-- add a TypeScript SDK as a sibling project once the client surface is stable
+- stores immutable assets and metadata
+- proxies original files and derivatives through HTTP endpoints
+- supports pagination, sorting, search, and JSON metadata filters
+- generates image thumbnails through background jobs
+- cleans up expired temporary assets
 
-## What the service provides
+## Run the microservice
 
-- immutable asset uploads and metadata persistence
-- proxied access to originals and generated derivatives
-- PostgreSQL-backed jobs for thumbnail generation and cleanup
-- S3-compatible object storage support
-- temporary asset expiration and deletion workflows
-
-## Stack
-
-- Bun
-- TypeScript
-- PostgreSQL
-- S3-compatible storage
-- MinIO for local development
-
-## Repository layout
-
-- `service/` Bun microservice, Docker setup, tests, and service-specific documentation
-
-## Local development
+Local Bun setup:
 
 ```bash
 cd service
@@ -39,11 +26,61 @@ bun run migrate
 bun run dev
 ```
 
-For Docker-based local infrastructure:
+Docker setup:
 
 ```bash
 cd service
 docker compose up --build
 ```
 
-See `service/README.md` for service details, environment variables, API behavior, and development commands.
+The service listens on `http://localhost:3000` by default.
+
+Required service configuration lives in `service/.env`; see [service/README.md](/Users/njxqlus/Developer/jean-claude-bun-dam/service/README.md:1) for environment variables, API details, and service development commands.
+
+## Install the SDK
+
+```bash
+npm install jean-claude-bun-dam-sdk
+```
+
+The SDK is dependency-light and uses standard `fetch`.
+
+Set the service address before using it:
+
+```bash
+export JEAN_CLAUDE_BUN_DAM_SERVER_URL=http://localhost:3000
+```
+
+## Use the SDK
+
+```ts
+import { createClient } from "jean-claude-bun-dam-sdk";
+
+const client = createClient();
+
+const asset = await client.createAsset({
+  file: new File(["hello"], "hello.txt", { type: "text/plain" }),
+  metadata: { project: "alpha" },
+});
+
+const assets = await client.listAssets({ search: "alpha" });
+const oneAsset = await client.getAsset(asset.id);
+const original = await client.getAssetFile(asset.id);
+const deleted = await client.deleteAsset(asset.id);
+```
+
+Available SDK methods:
+
+- `createAsset`
+- `listAssets`
+- `getAsset`
+- `getAssetFile`
+- `getAssetDerivative`
+- `deleteAsset`
+- `cleanupExpired`
+
+## Repository notes
+
+- the service is the source of truth for the API contract
+- the SDK is a thin client over the current HTTP endpoints
+- there is no auth layer in the service yet
