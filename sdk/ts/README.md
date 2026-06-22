@@ -20,6 +20,15 @@ const asset = await client.createAsset({
   metadata: { project: "alpha" },
 });
 
+const temporary = await client.createAsset({
+  file: new File(["draft"], "draft.txt", { type: "text/plain" }),
+  metadata: { project: "alpha" },
+  temporary: true,
+  ttlSeconds: 3600,
+});
+
+const finalized = await client.finalizeAsset(temporary.id);
+
 const list = await client.listAssets({ kind: "document" });
 const original = await client.getAssetFile(asset.id);
 ```

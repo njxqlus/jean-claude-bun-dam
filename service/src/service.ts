@@ -184,6 +184,16 @@ export class AssetService {
 		return await this.db.getAssetById(id);
 	}
 
+	async finalizeAsset(id: string) {
+		const asset = await this.db.getAssetById(id);
+		if (!asset) return null;
+		if (asset.expires_at == null) {
+			throw new Error("Asset is not temporary");
+		}
+		await this.db.clearAssetExpiry(id);
+		return await this.db.getAssetById(id);
+	}
+
 	async getOriginalFileResponse(id: string) {
 		const asset = await this.db.getAssetById(id);
 		if (!asset) return null;

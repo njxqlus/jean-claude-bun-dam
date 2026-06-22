@@ -29,6 +29,7 @@ export interface AssetRepository {
 		status: string,
 		error: string | null,
 	): Promise<AssetRecord | null>;
+	clearAssetExpiry(assetId: string): Promise<AssetRecord | null>;
 	getAssetById(assetId: string): Promise<AssetWithDerivatives | null>;
 	insertDerivative(input: CreateDerivativeInput): Promise<DerivativeRecord>;
 	getDerivative(
@@ -212,6 +213,24 @@ export class Database implements AssetRepository {
       update assets
       set status = ${status},
           error = ${error},
+          updated_at = now()
+      where id = ${assetId}
+      returning *
+		`;
+		return asset ? this.mapAsset(asset) : null;
+	}
+
+	async clearAssetExpiry(assetId: string) {
+		const [asset] = await this.sql<
+			Array<
+				Omit<AssetRecord, "metadata" | "typed_metadata"> & {
+					metadata: unknown;
+					typed_metadata: unknown;
+				}
+			>
+		>`
+      update assets
+      set expires_at = null,
           updated_at = now()
       where id = ${assetId}
       returning *

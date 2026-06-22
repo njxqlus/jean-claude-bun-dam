@@ -39,6 +39,12 @@ export function createFetchHandler(service: AssetService) {
 					? jsonResponse(asset)
 					: errorResponse(404, "Asset not found");
 			}
+			if (request.method === "POST" && assetMatch) {
+				const asset = await service.finalizeAsset(routeParam(assetMatch, 1));
+				return asset
+					? jsonResponse(asset)
+					: errorResponse(404, "Asset not found");
+			}
 			if (request.method === "DELETE" && assetMatch) {
 				const deleted = await service.deleteAsset(routeParam(assetMatch, 1));
 				return deleted
