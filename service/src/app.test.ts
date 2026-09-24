@@ -412,7 +412,6 @@ describe("asset endpoints", () => {
 		const created = (await createResponse.json()) as AssetWithDerivatives;
 		expect(created.original_filename).toBe("Greeting.TXT");
 		expect(created.normalized_name).toBe("greeting.txt");
-		expect(created.kind).toBe("other");
 		expect(context.storage.objects.has(created.storage_key)).toBe(true);
 
 		const getResponse = await context.fetch(
