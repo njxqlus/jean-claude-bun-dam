@@ -257,7 +257,18 @@ export function buildSearchText(
 }
 
 export function withContentDisposition(filename: string): string {
-	return `inline; filename="${filename.replace(/"/g, "")}"`;
+	// HTTP response headers are ASCII-only. Keep an ASCII fallback for older
+	// clients and put the original UTF-8 filename in the RFC 5987 parameter.
+	const fallback = filename
+		.normalize("NFKD")
+		.replace(/[\u0300-\u036f]/g, "")
+		.replace(/[^\x20-\x7E]/g, "_")
+		.replace(/["\\\\]/g, "_");
+	const encoded = encodeURIComponent(filename).replace(
+		/[!'()*]/g,
+		(character) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`,
+	);
+	return `inline; filename="${fallback || "download"}"; filename*=UTF-8''${encoded}`;
 }
 
 export function nowIso(): string {

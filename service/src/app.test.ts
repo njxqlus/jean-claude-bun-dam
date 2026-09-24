@@ -362,6 +362,7 @@ describe("job claiming", () => {
 });
 
 async function createAssetRequest(fields?: {
+	filename?: string;
 	search?: string;
 	metadata?: Record<string, unknown>;
 	temporary?: boolean;
@@ -370,7 +371,9 @@ async function createAssetRequest(fields?: {
 	const formData = new FormData();
 	formData.set(
 		"file",
-		new File(["hello integration"], "Greeting.TXT", { type: "text/plain" }),
+		new File(["hello integration"], fields?.filename ?? "Greeting.TXT", {
+			type: "text/plain",
+		}),
 	);
 	if (fields?.search) {
 		formData.set("search", fields.search);
@@ -427,6 +430,22 @@ describe("asset endpoints", () => {
 		expect(fileResponse.headers.get("content-type")).toBe(created.mime_type);
 		expect(fileResponse.headers.get("content-length")).toBe("17");
 		expect(await fileResponse.text()).toBe("hello integration");
+	});
+
+	test("serves Unicode filenames without putting Unicode in response headers", async () => {
+		const createResponse = await context.fetch(
+			await createAssetRequest({ filename: "Quarter\u202Fone.txt" }),
+		);
+		const created = (await createResponse.json()) as AssetWithDerivatives;
+
+		const fileResponse = await context.fetch(
+			new Request(`http://test/assets/${created.id}/file`),
+		);
+
+		expect(fileResponse.status).toBe(200);
+		expect(fileResponse.headers.get("content-disposition")).toBe(
+			"inline; filename=\"Quarter one.txt\"; filename*=UTF-8''Quarter%E2%80%AFone.txt",
+		);
 	});
 
 	test("serves health and readiness endpoints", async () => {
